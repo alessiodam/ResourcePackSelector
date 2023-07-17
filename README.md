@@ -1,6 +1,7 @@
 # ResourcePackSelector
 
 A way to let players choose between server-approved resource packs.
+
 After starting the plugin for the first time, shutdown the server and add resource packs to the config file located in ResourcePackSelector/config.yml.
 
 Example config:
