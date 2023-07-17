@@ -6,7 +6,7 @@
 
     <groupId>com.tkbstudios</groupId>
     <artifactId>ResourcePackSelector</artifactId>
-    <version>1.20.1-0.0.1</version>
+    <version>1.20.1-0.0.2</version>
     <packaging>jar</packaging>
 
     <name>ResourcePackSelector</name>

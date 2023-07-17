@@ -18,6 +18,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -27,34 +28,39 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        saveDefaultConfig();
-        config = getConfig();
-
-        // Add default resource pack if it doesn't exist
-        if (!config.contains("resourcePacks.Default")) {
-            config.set("resourcePacks.Default", "https://mediafilez.forgecdn.net/files/4572/162/VanillaDefault+1.20.zip");
-            saveConfig();
+        // Check if the configuration file exists
+        File configFile = new File(getDataFolder(), "config.yml");
+        if (!configFile.exists()) {
+            // If it doesn't exist, save the default configuration
+            saveDefaultConfig();
+            getLogger().info("Config.yml not found. Creating default configuration file.");
         }
+
+        // Load the configuration
+        config = getConfig();
 
         getServer().getPluginManager().registerEvents(this, this);
     }
 
     @Override
     public void onDisable() {
-        saveConfig();
+        System.out.println("Disabled ResourcePackSelector!");
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         UUID playerUUID = player.getUniqueId();
-        if (!config.contains("players." + playerUUID)) {
+        if (config.getBoolean("resourcePackSelector.promptAtJoin", true) && !config.contains("players." + playerUUID)) {
             openResourcePackSelectionGUI(player);
         } else {
             String resourcePackName = config.getString("players." + playerUUID);
-            sendResourcePack(player, resourcePackName);
+            if (resourcePackName != null) {
+                sendResourcePack(player, resourcePackName);
+            }
         }
     }
+
 
     private void openResourcePackSelectionGUI(Player player) {
         List<String> resourcePacks = new ArrayList<>(config.getConfigurationSection("resourcePacks").getKeys(false));
@@ -80,21 +86,20 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
         if (!(event.getWhoClicked() instanceof Player)) return;
         Player player = (Player) event.getWhoClicked();
 
-        if (event.getView().getTitle().equals(ChatColor.GOLD + "Resource Pack Selection")) {
-            event.setCancelled(true);
+        if (!event.getView().getTitle().equals(ChatColor.GOLD + "Resource Pack Selection")) return;
+        event.setCancelled(true);
 
-            ItemStack clickedItem = event.getCurrentItem();
-            if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
+        ItemStack clickedItem = event.getCurrentItem();
+        if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
 
-            String resourcePackName = ChatColor.stripColor(clickedItem.getItemMeta().getDisplayName());
-            config.set("players." + player.getUniqueId(), resourcePackName);
-            saveConfig();
-            sendResourcePack(player, resourcePackName);
+        String resourcePackName = ChatColor.stripColor(clickedItem.getItemMeta().getDisplayName());
+        config.set("players." + player.getUniqueId(), resourcePackName);
+        saveConfig();
+        sendResourcePack(player, resourcePackName);
 
-            player.closeInventory(); // Close the GUI
+        player.closeInventory(); // Close the GUI
 
-            player.playSound(player.getLocation(), Sound.ITEM_ARMOR_EQUIP_CHAIN, 1.0f, 1.0f);
-        }
+        player.playSound(player.getLocation(), Sound.ITEM_ARMOR_EQUIP_CHAIN, 1.0f, 1.0f);
     }
 
     private void sendResourcePack(Player player, String resourcePackName) {
@@ -110,15 +115,15 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (command.getName().equalsIgnoreCase("changerep")) {
-            if (!(sender instanceof Player)) {
-                sender.sendMessage(ChatColor.RED + "Only players can use this command.");
-                return true;
-            }
-            Player player = (Player) sender;
-            openResourcePackSelectionGUI(player);
+        if (!command.getName().equalsIgnoreCase("changerep")) return false;
+
+        if (!(sender instanceof Player)) {
+            sender.sendMessage(ChatColor.RED + "Only players can use this command.");
             return true;
         }
-        return false;
+
+        Player player = (Player) sender;
+        openResourcePackSelectionGUI(player);
+        return true;
     }
 }

@@ -1,0 +1,5 @@
+resourcePackSelector:
+  promptAtJoin: true
+
+resourcePacks:
+  Default: "https://mediafilez.forgecdn.net/files/4572/162/VanillaDefault+1.20.zip"
