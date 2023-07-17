@@ -6,6 +6,7 @@ import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -21,6 +22,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.UUID;
 
 public class ResourcePackSelector extends JavaPlugin implements Listener {
@@ -51,7 +53,7 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         UUID playerUUID = player.getUniqueId();
-        if (config.getBoolean("resourcePackSelector.promptAtJoin", true) && !config.contains("players." + playerUUID)) {
+        if (config.getBoolean("Settings.promptAtJoin", true) && !config.contains("players." + playerUUID)) {
             openResourcePackSelectionGUI(player);
         } else {
             String resourcePackName = config.getString("players." + playerUUID);
@@ -61,9 +63,21 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
         }
     }
 
-
     private void openResourcePackSelectionGUI(Player player) {
-        List<String> resourcePacks = new ArrayList<>(config.getConfigurationSection("resourcePacks").getKeys(false));
+        List<String> resourcePacks = new ArrayList<>();
+        ConfigurationSection packsSection = config.getConfigurationSection("resourcePacks");
+        for (String pack : packsSection.getKeys(false)) {
+            String permission = packsSection.getString(pack + ".permission");
+            if (permission != null && player.hasPermission(permission)) {
+                resourcePacks.add(pack);
+            }
+        }
+
+        if (resourcePacks.isEmpty()) {
+            player.sendMessage(ChatColor.RED + "No resource packs available for you.");
+            return;
+        }
+
         int inventorySize = (int) Math.ceil(resourcePacks.size() / 9.0) * 9; // Round up to the nearest multiple of 9
         Inventory inventory = Bukkit.createInventory(null, inventorySize, ChatColor.GOLD + "Resource Pack Selection");
 
@@ -80,6 +94,7 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
 
         player.openInventory(inventory);
     }
+
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
@@ -103,7 +118,13 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
     }
 
     private void sendResourcePack(Player player, String resourcePackName) {
-        String resourcePackUrl = config.getString("resourcePacks." + resourcePackName);
+        ConfigurationSection packsSection = config.getConfigurationSection("resourcePacks");
+        if (!packsSection.contains(resourcePackName)) {
+            player.sendMessage(ChatColor.RED + "Failed to find the resource pack configuration for " + resourcePackName);
+            return;
+        }
+
+        String resourcePackUrl = packsSection.getString(resourcePackName + ".url");
         if (resourcePackUrl != null) {
             player.sendMessage(ChatColor.YELLOW + "Sending " + resourcePackName + " resource pack!");
             player.setResourcePack(resourcePackUrl);
@@ -115,7 +136,9 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!command.getName().equalsIgnoreCase("changerep")) return false;
+        if (!command.getName().equalsIgnoreCase("changerep") && !command.getName().equalsIgnoreCase("randomrep")) {
+            return false;
+        }
 
         if (!(sender instanceof Player)) {
             sender.sendMessage(ChatColor.RED + "Only players can use this command.");
@@ -123,7 +146,34 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
         }
 
         Player player = (Player) sender;
-        openResourcePackSelectionGUI(player);
+
+        if (command.getName().equalsIgnoreCase("changerep")) {
+            openResourcePackSelectionGUI(player);
+        } else if (command.getName().equalsIgnoreCase("randomrep")) {
+            selectRandomResourcePack(player);
+        }
+
         return true;
+    }
+
+    private void selectRandomResourcePack(Player player) {
+        List<String> resourcePacks = new ArrayList<>();
+        ConfigurationSection packsSection = config.getConfigurationSection("resourcePacks");
+        for (String pack : packsSection.getKeys(false)) {
+            if (player.hasPermission(packsSection.getString(pack + ".permission"))) {
+                resourcePacks.add(pack);
+            }
+        }
+
+        if (resourcePacks.isEmpty()) {
+            player.sendMessage(ChatColor.RED + "No resource packs available for you.");
+            return;
+        }
+
+        String randomPack = resourcePacks.get(new Random().nextInt(resourcePacks.size()));
+        config.set("players." + player.getUniqueId(), randomPack);
+        saveConfig();
+
+        sendResourcePack(player, randomPack);
     }
 }

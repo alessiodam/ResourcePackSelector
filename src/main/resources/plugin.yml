@@ -7,3 +7,7 @@ commands:
     description: change your resource pack using changerep !
     usage: /changerep
     permission: resourcepackselector.changerep
+  randomrep:
+    description: Choose a random resource pack using randomrep!
+    usage: /randomrep
+    permission: resourcepackselector.randomrep
