@@ -1,0 +1,9 @@
+name: ResourcePackSelector
+version: '${project.version}'
+main: com.tkbstudios.resourcepackselector.ResourcePackSelector
+api-version: '1.20'
+commands:
+  changerep:
+    description: change your resource pack using changerep !
+    usage: /changerep
+    permission: resourcepackselector.changerep
