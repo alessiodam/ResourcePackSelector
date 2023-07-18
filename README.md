@@ -1,5 +1,3 @@
-Certainly! Here's an updated version of the README.md file that includes the command permissions:
-
 # ResourcePackSelector
 
 ResourcePackSelector is a Bukkit plugin that allows players to select from a list of server-approved resource packs. Players can choose their preferred resource pack, and the plugin will apply it to enhance their gameplay experience.
@@ -69,4 +67,3 @@ Ensure that you have the correct URLs and permission nodes for the resource pack
 6. Players with the appropriate permissions can use the `/randomrep` command to select a random resource pack from the available options.
 
 That's it! With ResourcePackSelector, you can provide players with a curated selection of resource packs to enhance their gameplay experience on your server.
-```
