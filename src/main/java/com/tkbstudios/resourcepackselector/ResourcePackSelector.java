@@ -27,9 +27,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class ResourcePackSelector extends JavaPlugin implements Listener {
-    private Logger pluginLogger = PluginLogger.getLogger("ResourcePackSelector");
+    private final Logger pluginLogger = PluginLogger.getLogger("ResourcePackSelector");
     private FileConfiguration config;
-    private Map<UUID, Long> cooldowns = new HashMap<>();
+    private final Map<UUID, Long> cooldowns = new HashMap<>();
 
     @Override
     public void onEnable() {
@@ -50,7 +50,7 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
-        System.out.println("Disabled ResourcePackSelector!");
+        pluginLogger.log(Level.INFO, ChatColor.RED + "ResourcePackSelector disabled.");
     }
 
     private void reloadConfigFile() {
@@ -103,7 +103,8 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
     private void openResourcePackSelectionGUI(Player player) {
         List<String> resourcePacks = new ArrayList<>();
         ConfigurationSection packsSection = config.getConfigurationSection("resourcePacks");
-        assert packsSection != null;
+        if (packsSection == null) return;
+
         for (String pack : packsSection.getKeys(false)) {
             String permission = packsSection.getString(pack + ".permission");
             if (permission != null && player.hasPermission(permission)) {
@@ -138,7 +139,7 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
         if (!(event.getWhoClicked() instanceof Player)) return;
         Player player = (Player) event.getWhoClicked();
 
-        if (!event.getView().getOriginalTitle().equals(ChatColor.GOLD + "Resource Pack Selection")) return;
+        if (!event.getView().getTitle().equals(ChatColor.GOLD + "Resource Pack Selection")) return;
         event.setCancelled(true);
 
         ItemStack clickedItem = event.getCurrentItem();
@@ -168,7 +169,8 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
 
     private void sendResourcePack(Player player, String resourcePackName) {
         ConfigurationSection packsSection = config.getConfigurationSection("resourcePacks");
-        assert packsSection != null;
+        if (packsSection == null) return;
+
         if (!packsSection.contains(resourcePackName)) {
             player.sendMessage(ChatColor.RED + "Failed to find the resource pack configuration for " + resourcePackName);
             return;
@@ -218,7 +220,8 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
     private void selectRandomResourcePack(Player player) {
         List<String> resourcePacks = new ArrayList<>();
         ConfigurationSection packsSection = config.getConfigurationSection("resourcePacks");
-        assert packsSection != null;
+        if (packsSection == null) return;
+
         for (String pack : packsSection.getKeys(false)) {
             if (player.hasPermission(Objects.requireNonNull(packsSection.getString(pack + ".permission")))) {
                 resourcePacks.add(pack);
