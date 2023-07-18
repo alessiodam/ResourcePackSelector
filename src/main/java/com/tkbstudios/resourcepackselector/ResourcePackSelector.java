@@ -22,14 +22,17 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class ResourcePackSelector extends JavaPlugin implements Listener {
-    private final Logger pluginLogger = PluginLogger.getLogger("ResourcePackSelector");
+    private Logger pluginLogger = PluginLogger.getLogger("ResourcePackSelector");
     private FileConfiguration config;
-    private final Map<UUID, Long> cooldowns = new HashMap<>();
+    private File cooldownsFile;
+    private FileConfiguration cooldownsConfig;
+    private Map<UUID, Long> cooldowns = new HashMap<>();
 
     @Override
     public void onEnable() {
@@ -44,13 +47,26 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
         // Load the configuration
         config = getConfig();
 
+        cooldownsFile = new File(getDataFolder(), "cooldowns.yml");
+        if (!cooldownsFile.exists()) {
+            try {
+                cooldownsFile.createNewFile();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        cooldownsConfig = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(cooldownsFile);
+
+        loadCooldowns();
+
         getServer().getPluginManager().registerEvents(this, this);
         pluginLogger.log(Level.INFO, ChatColor.GREEN + "ResourcePackSelector successfully loaded!");
     }
 
     @Override
     public void onDisable() {
-        pluginLogger.log(Level.INFO, ChatColor.RED + "ResourcePackSelector disabled.");
+        saveCooldowns();
+        System.out.println("Disabled ResourcePackSelector!");
     }
 
     private void reloadConfigFile() {
@@ -58,6 +74,28 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
         reloadConfig();
         config = getConfig();
         pluginLogger.log(Level.INFO, "Reloaded config!");
+    }
+
+    private void loadCooldowns() {
+        if (cooldownsFile.exists()) {
+            for (String key : cooldownsConfig.getKeys(false)) {
+                UUID playerId = UUID.fromString(key);
+                long cooldownTimestamp = cooldownsConfig.getLong(key);
+                cooldowns.put(playerId, cooldownTimestamp);
+            }
+        }
+    }
+
+    private void saveCooldowns() {
+        for (Map.Entry<UUID, Long> entry : cooldowns.entrySet()) {
+            cooldownsConfig.set(entry.getKey().toString(), entry.getValue());
+        }
+
+        try {
+            cooldownsConfig.save(cooldownsFile);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     private boolean isCooldownEnabled() {
@@ -103,8 +141,7 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
     private void openResourcePackSelectionGUI(Player player) {
         List<String> resourcePacks = new ArrayList<>();
         ConfigurationSection packsSection = config.getConfigurationSection("resourcePacks");
-        if (packsSection == null) return;
-
+        assert packsSection != null;
         for (String pack : packsSection.getKeys(false)) {
             String permission = packsSection.getString(pack + ".permission");
             if (permission != null && player.hasPermission(permission)) {
@@ -139,7 +176,7 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
         if (!(event.getWhoClicked() instanceof Player)) return;
         Player player = (Player) event.getWhoClicked();
 
-        if (!event.getView().getTitle().equals(ChatColor.GOLD + "Resource Pack Selection")) return;
+        if (!event.getView().getOriginalTitle().equals(ChatColor.GOLD + "Resource Pack Selection")) return;
         event.setCancelled(true);
 
         ItemStack clickedItem = event.getCurrentItem();
@@ -169,8 +206,7 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
 
     private void sendResourcePack(Player player, String resourcePackName) {
         ConfigurationSection packsSection = config.getConfigurationSection("resourcePacks");
-        if (packsSection == null) return;
-
+        assert packsSection != null;
         if (!packsSection.contains(resourcePackName)) {
             player.sendMessage(ChatColor.RED + "Failed to find the resource pack configuration for " + resourcePackName);
             return;
@@ -196,14 +232,32 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
             Player player = (Player) sender;
             openResourcePackSelectionGUI(player);
             return true;
+
         } else if (command.getName().equalsIgnoreCase("randomrep")) {
             if (!(sender instanceof Player)) {
                 sender.sendMessage(ChatColor.RED + "Only players can use this command.");
                 return true;
             }
             Player player = (Player) sender;
+
+            if (isCooldownEnabled() && !hasCooldownExpired(player.getUniqueId())) {
+                long cooldownDuration = getCooldownDuration();
+                long remainingCooldown = (cooldowns.get(player.getUniqueId()) + cooldownDuration) - (System.currentTimeMillis() / 1000L);
+                player.sendMessage(ChatColor.RED + "You are still on cooldown. Please wait " + remainingCooldown + " seconds.");
+                return true;
+            }
+
             selectRandomResourcePack(player);
+
+            player.playSound(player.getLocation(), Sound.ITEM_ARMOR_EQUIP_CHAIN, 1.0f, 1.0f);
+
+            if (isCooldownEnabled()) {
+                setCooldown(player.getUniqueId());
+                Bukkit.getScheduler().runTaskLater(this, () -> clearCooldown(player.getUniqueId()), getCooldownDuration() * 20L);
+            }
+
             return true;
+
         } else if (command.getName().equalsIgnoreCase("reloadrpsconf")) {
             if (!sender.hasPermission("resourcepackselector.reloadconf")) {
                 sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
@@ -220,8 +274,7 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
     private void selectRandomResourcePack(Player player) {
         List<String> resourcePacks = new ArrayList<>();
         ConfigurationSection packsSection = config.getConfigurationSection("resourcePacks");
-        if (packsSection == null) return;
-
+        assert packsSection != null;
         for (String pack : packsSection.getKeys(false)) {
             if (player.hasPermission(Objects.requireNonNull(packsSection.getString(pack + ".permission")))) {
                 resourcePacks.add(pack);
