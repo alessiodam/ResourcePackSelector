@@ -8,3 +8,7 @@ resourcePacks:
 
 Settings:
   promptAtJoin: true
+
+cooldown:
+  enabled: true
+  duration: 300 # Cooldown duration in seconds

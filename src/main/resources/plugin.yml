@@ -4,10 +4,14 @@ main: com.tkbstudios.resourcepackselector.ResourcePackSelector
 api-version: '1.20'
 commands:
   changerep:
-    description: change your resource pack using changerep !
+    description: change your resource pack using changerep.
     usage: /changerep
     permission: resourcepackselector.changerep
   randomrep:
-    description: Choose a random resource pack using randomrep!
+    description: Choose a random resource pack using randomrep.
     usage: /randomrep
     permission: resourcepackselector.randomrep
+  reloadrpsconf:
+    description: Reload Resource Pack Selector config.
+    usage: /reloadrpsconf
+    permission: resourcepackselector.reloadconf
