@@ -27,7 +27,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class ResourcePackSelector extends JavaPlugin implements Listener {
-    Logger pluginLogger = PluginLogger.getLogger("ResourcePackSelector");
+    private Logger pluginLogger = PluginLogger.getLogger("ResourcePackSelector");
     private FileConfiguration config;
     private Map<UUID, Long> cooldowns = new HashMap<>();
 
@@ -54,7 +54,7 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
     }
 
     private void reloadConfigFile() {
-        pluginLogger.log(Level.WARNING, "Reloading.. config!");
+        pluginLogger.log(Level.WARNING, "Reloading config!");
         reloadConfig();
         config = getConfig();
         pluginLogger.log(Level.INFO, "Reloaded config!");
@@ -133,7 +133,6 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
         player.openInventory(inventory);
     }
 
-
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player)) return;
@@ -152,7 +151,7 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
             return;
         }
 
-        String resourcePackName = ChatColor.GREEN + clickedItem.getItemMeta().getDisplayName();
+        String resourcePackName = ChatColor.stripColor(clickedItem.getItemMeta().getDisplayName());
         config.set("players." + player.getUniqueId(), resourcePackName);
         saveConfig();
         sendResourcePack(player, resourcePackName);
@@ -170,13 +169,12 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
     private void sendResourcePack(Player player, String resourcePackName) {
         ConfigurationSection packsSection = config.getConfigurationSection("resourcePacks");
         assert packsSection != null;
-        String strippedName = ChatColor.stripColor(resourcePackName);
-        if (!packsSection.contains(strippedName)) {
+        if (!packsSection.contains(resourcePackName)) {
             player.sendMessage(ChatColor.RED + "Failed to find the resource pack configuration for " + resourcePackName);
             return;
         }
 
-        String resourcePackUrl = packsSection.getString(strippedName + ".url");
+        String resourcePackUrl = packsSection.getString(resourcePackName + ".url");
         if (resourcePackUrl != null) {
             player.sendMessage(ChatColor.GOLD + "Sending " + resourcePackName + " resource pack!");
             player.setResourcePack(resourcePackUrl);
@@ -185,7 +183,6 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
             player.sendMessage(ChatColor.RED + "Failed to find the resource pack URL for " + resourcePackName);
         }
     }
-
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, Command command, @NotNull String label, String[] args) {
@@ -217,7 +214,6 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
 
         return false;
     }
-
 
     private void selectRandomResourcePack(Player player) {
         List<String> resourcePacks = new ArrayList<>();
