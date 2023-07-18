@@ -189,36 +189,35 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, Command command, @NotNull String label, String[] args) {
-        if (!command.getName().equalsIgnoreCase("changerep") && !command.getName().equalsIgnoreCase("randomrep")) {
-            return false;
-        }
-
-        if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "Only players can use this command.");
-            return true;
-        }
-
-        Player player = (Player) sender;
-
         if (command.getName().equalsIgnoreCase("changerep")) {
-            openResourcePackSelectionGUI(player);
-        } else if (command.getName().equalsIgnoreCase("randomrep")) {
-            selectRandomResourcePack(player);
-        }
-
-        if (command.getName().equalsIgnoreCase("reloadrpsconf")) {
-            if (sender.hasPermission("resourcepackselector.reloadconf")) {
-                sender.sendMessage(ChatColor.GOLD + "Reloading ResourcePackSelector config..");
-                reloadConfigFile();
-                sender.sendMessage(ChatColor.GREEN + "ResourcePackSelector config reloaded!");
-            } else {
-                sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
+            if (!(sender instanceof Player)) {
+                sender.sendMessage(ChatColor.RED + "Only players can use this command.");
+                return true;
             }
+            Player player = (Player) sender;
+            openResourcePackSelectionGUI(player);
+            return true;
+        } else if (command.getName().equalsIgnoreCase("randomrep")) {
+            if (!(sender instanceof Player)) {
+                sender.sendMessage(ChatColor.RED + "Only players can use this command.");
+                return true;
+            }
+            Player player = (Player) sender;
+            selectRandomResourcePack(player);
+            return true;
+        } else if (command.getName().equalsIgnoreCase("reloadrpsconf")) {
+            if (!sender.hasPermission("resourcepackselector.reloadconf")) {
+                sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
+                return true;
+            }
+            reloadConfigFile();
+            sender.sendMessage(ChatColor.GOLD + "ResourcePackSelector config reloaded!");
             return true;
         }
 
-        return true;
+        return false;
     }
+
 
     private void selectRandomResourcePack(Player player) {
         List<String> resourcePacks = new ArrayList<>();
