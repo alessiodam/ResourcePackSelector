@@ -2,16 +2,18 @@ name: ResourcePackSelector
 version: '${project.version}'
 main: com.tkbstudios.resourcepackselector.ResourcePackSelector
 api-version: '1.20'
+description: A plugin that allows players to select and change server-approved resource packs.
+author: TKB Studios
 commands:
   changerep:
-    description: change your resource pack using changerep.
+    description: Change your resource pack using /changerep.
     usage: /changerep
     permission: resourcepackselector.changerep
   randomrep:
-    description: Choose a random resource pack using randomrep.
+    description: Choose a random resource pack using /randomrep.
     usage: /randomrep
     permission: resourcepackselector.randomrep
   reloadrpsconf:
-    description: Reload Resource Pack Selector config.
+    description: Reload Resource Pack Selector configuration.
     usage: /reloadrpsconf
     permission: resourcepackselector.reloadconf
