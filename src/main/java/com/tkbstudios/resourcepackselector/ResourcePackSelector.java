@@ -1,7 +1,7 @@
 package com.tkbstudios.resourcepackselector;
 
-import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.command.Command;
@@ -17,16 +17,22 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.plugin.PluginLogger;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.UUID;
+import java.io.IOException;
+import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class ResourcePackSelector extends JavaPlugin implements Listener {
+    private Logger pluginLogger = PluginLogger.getLogger("ResourcePackSelector");
     private FileConfiguration config;
+    private File cooldownsFile;
+    private FileConfiguration cooldownsConfig;
+    private Map<UUID, Long> cooldowns = new HashMap<>();
 
     @Override
     public void onEnable() {
@@ -35,18 +41,87 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
         if (!configFile.exists()) {
             // If it doesn't exist, save the default configuration
             saveDefaultConfig();
-            getLogger().info("Config.yml not found. Creating default configuration file.");
+            pluginLogger.log(Level.WARNING, "Config.yml not found. Creating default configuration file.");
         }
 
         // Load the configuration
         config = getConfig();
 
+        cooldownsFile = new File(getDataFolder(), "cooldowns.yml");
+        if (!cooldownsFile.exists()) {
+            try {
+                cooldownsFile.createNewFile();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        cooldownsConfig = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(cooldownsFile);
+
+        loadCooldowns();
+
         getServer().getPluginManager().registerEvents(this, this);
+        pluginLogger.log(Level.INFO, ChatColor.GREEN + "ResourcePackSelector successfully loaded!");
     }
 
     @Override
     public void onDisable() {
+        saveCooldowns();
         System.out.println("Disabled ResourcePackSelector!");
+    }
+
+    private void reloadConfigFile() {
+        pluginLogger.log(Level.WARNING, "Reloading config!");
+        reloadConfig();
+        config = getConfig();
+        pluginLogger.log(Level.INFO, "Reloaded config!");
+    }
+
+    private void loadCooldowns() {
+        if (cooldownsFile.exists()) {
+            for (String key : cooldownsConfig.getKeys(false)) {
+                UUID playerId = UUID.fromString(key);
+                long cooldownTimestamp = cooldownsConfig.getLong(key);
+                cooldowns.put(playerId, cooldownTimestamp);
+            }
+        }
+    }
+
+    private void saveCooldowns() {
+        for (Map.Entry<UUID, Long> entry : cooldowns.entrySet()) {
+            cooldownsConfig.set(entry.getKey().toString(), entry.getValue());
+        }
+
+        try {
+            cooldownsConfig.save(cooldownsFile);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private boolean isCooldownEnabled() {
+        return config.getBoolean("cooldown.enabled", true);
+    }
+
+    private int getCooldownDuration() {
+        return config.getInt("cooldown.duration", 300);
+    }
+
+    private boolean hasCooldownExpired(UUID playerId) {
+        if (!cooldowns.containsKey(playerId)) {
+            return true;
+        }
+        long lastChangeTimestamp = cooldowns.get(playerId);
+        int cooldownDuration = getCooldownDuration();
+        long currentTime = System.currentTimeMillis() / 1000L;
+        return (currentTime - lastChangeTimestamp) >= cooldownDuration;
+    }
+
+    private void setCooldown(UUID playerId) {
+        cooldowns.put(playerId, System.currentTimeMillis() / 1000L);
+    }
+
+    private void clearCooldown(UUID playerId) {
+        cooldowns.remove(playerId);
     }
 
     @EventHandler
@@ -66,6 +141,7 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
     private void openResourcePackSelectionGUI(Player player) {
         List<String> resourcePacks = new ArrayList<>();
         ConfigurationSection packsSection = config.getConfigurationSection("resourcePacks");
+        assert packsSection != null;
         for (String pack : packsSection.getKeys(false)) {
             String permission = packsSection.getString(pack + ".permission");
             if (permission != null && player.hasPermission(permission)) {
@@ -95,17 +171,23 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
         player.openInventory(inventory);
     }
 
-
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player)) return;
         Player player = (Player) event.getWhoClicked();
 
-        if (!event.getView().getTitle().equals(ChatColor.GOLD + "Resource Pack Selection")) return;
+        if (!event.getView().getOriginalTitle().equals(ChatColor.GOLD + "Resource Pack Selection")) return;
         event.setCancelled(true);
 
         ItemStack clickedItem = event.getCurrentItem();
         if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
+
+        if (isCooldownEnabled() && !hasCooldownExpired(player.getUniqueId())) {
+            long cooldownDuration = getCooldownDuration();
+            long remainingCooldown = (cooldowns.get(player.getUniqueId()) + cooldownDuration) - (System.currentTimeMillis() / 1000L);
+            player.sendMessage(ChatColor.RED + "You are still on cooldown. Please wait " + remainingCooldown + " seconds.");
+            return;
+        }
 
         String resourcePackName = ChatColor.stripColor(clickedItem.getItemMeta().getDisplayName());
         config.set("players." + player.getUniqueId(), resourcePackName);
@@ -115,10 +197,16 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
         player.closeInventory(); // Close the GUI
 
         player.playSound(player.getLocation(), Sound.ITEM_ARMOR_EQUIP_CHAIN, 1.0f, 1.0f);
+
+        if (isCooldownEnabled()) {
+            setCooldown(player.getUniqueId());
+            Bukkit.getScheduler().runTaskLater(this, () -> clearCooldown(player.getUniqueId()), getCooldownDuration() * 20L);
+        }
     }
 
     private void sendResourcePack(Player player, String resourcePackName) {
         ConfigurationSection packsSection = config.getConfigurationSection("resourcePacks");
+        assert packsSection != null;
         if (!packsSection.contains(resourcePackName)) {
             player.sendMessage(ChatColor.RED + "Failed to find the resource pack configuration for " + resourcePackName);
             return;
@@ -126,7 +214,7 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
 
         String resourcePackUrl = packsSection.getString(resourcePackName + ".url");
         if (resourcePackUrl != null) {
-            player.sendMessage(ChatColor.YELLOW + "Sending " + resourcePackName + " resource pack!");
+            player.sendMessage(ChatColor.GOLD + "Sending " + resourcePackName + " resource pack!");
             player.setResourcePack(resourcePackUrl);
             player.sendMessage(ChatColor.GREEN + "Sent " + resourcePackName + " resource pack!");
         } else {
@@ -135,32 +223,60 @@ public class ResourcePackSelector extends JavaPlugin implements Listener {
     }
 
     @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!command.getName().equalsIgnoreCase("changerep") && !command.getName().equalsIgnoreCase("randomrep")) {
-            return false;
-        }
+    public boolean onCommand(@NotNull CommandSender sender, Command command, @NotNull String label, String[] args) {
+        if (command.getName().equalsIgnoreCase("changerep")) {
+            if (!(sender instanceof Player)) {
+                sender.sendMessage(ChatColor.RED + "Only players can use this command.");
+                return true;
+            }
+            Player player = (Player) sender;
+            openResourcePackSelectionGUI(player);
+            return true;
 
-        if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "Only players can use this command.");
+        } else if (command.getName().equalsIgnoreCase("randomrep")) {
+            if (!(sender instanceof Player)) {
+                sender.sendMessage(ChatColor.RED + "Only players can use this command.");
+                return true;
+            }
+            Player player = (Player) sender;
+
+            if (isCooldownEnabled() && !hasCooldownExpired(player.getUniqueId())) {
+                long cooldownDuration = getCooldownDuration();
+                long remainingCooldown = (cooldowns.get(player.getUniqueId()) + cooldownDuration) - (System.currentTimeMillis() / 1000L);
+                player.sendMessage(ChatColor.RED + "You are still on cooldown. Please wait " + remainingCooldown + " seconds.");
+                return true;
+            }
+
+            selectRandomResourcePack(player);
+
+            player.playSound(player.getLocation(), Sound.ITEM_ARMOR_EQUIP_CHAIN, 1.0f, 1.0f);
+
+            if (isCooldownEnabled()) {
+                setCooldown(player.getUniqueId());
+                Bukkit.getScheduler().runTaskLater(this, () -> clearCooldown(player.getUniqueId()), getCooldownDuration() * 20L);
+            }
+
+            return true;
+
+        } else if (command.getName().equalsIgnoreCase("reloadrpsconf")) {
+            if (!sender.hasPermission("resourcepackselector.reloadconf")) {
+                sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
+                return true;
+            }
+            reloadConfigFile();
+            sender.sendMessage(ChatColor.GOLD + "ResourcePackSelector config reloaded!");
             return true;
         }
 
-        Player player = (Player) sender;
-
-        if (command.getName().equalsIgnoreCase("changerep")) {
-            openResourcePackSelectionGUI(player);
-        } else if (command.getName().equalsIgnoreCase("randomrep")) {
-            selectRandomResourcePack(player);
-        }
-
-        return true;
+        return false;
     }
 
     private void selectRandomResourcePack(Player player) {
         List<String> resourcePacks = new ArrayList<>();
         ConfigurationSection packsSection = config.getConfigurationSection("resourcePacks");
+        assert packsSection != null;
         for (String pack : packsSection.getKeys(false)) {
-            if (player.hasPermission(packsSection.getString(pack + ".permission"))) {
+            if (player.hasPermission(Objects.requireNonNull(packsSection.getString(pack + ".permission")))) {
                 resourcePacks.add(pack);
             }
         }
